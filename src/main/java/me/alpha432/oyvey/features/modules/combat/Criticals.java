@@ -1,37 +1,50 @@
-package me.alpha432.oyvey.features.modules.combat;
+package me.yourclient.features.modules.combat;
 
-import me.alpha432.oyvey.event.impl.PacketEvent;
-import me.alpha432.oyvey.event.system.Subscribe;
-import me.alpha432.oyvey.features.modules.Module;
-import net.minecraft.network.protocol.game.ServerboundInteractPacket;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import me.yourclient.event.impl.TickEvent;
+import me.yourclient.event.system.Subscribe;
+import me.yourclient.features.modules.Module;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
 
-public class Criticals extends Module {
-    public Criticals() {
-        super("Crits", "Does crits for you", Category.COMBAT);
+public class AutoAttack extends Module {
+
+    public AutoAttack() {
+        super("AutoAttack", "Attacks a player when you look at them", Category.COMBAT);
     }
 
     @Subscribe
-    private void onPacketSend(PacketEvent.Send event) {
-        if (event.getPacket() instanceof ServerboundInteractPacket packet && packet.action.getType() == ServerboundInteractPacket.ActionType.ATTACK) {
-            Entity entity = mc.level.getEntity(packet.entityId);
-            if (entity == null
-                    || entity instanceof EndCrystal
-                    || !mc.player.onGround()
-                    || !(entity instanceof LivingEntity)) return;
+    private void onTick(TickEvent.Post event) {
+        if (mc.player == null || mc.level == null || mc.gameMode == null) return;
 
-            boolean bl = mc.player.horizontalCollision;
-            mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(mc.player.getX(), mc.player.getY() + 0.1f, mc.player.getZ(), false, bl));
-            mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(mc.player.getX(), mc.player.getY(), mc.player.getZ(), false, bl));
-            mc.player.crit(entity);
-        }
+        // Respect 1.21 attack cooldown
+        if (mc.player.getAttackStrengthScale(0.0F) < 1.0F) return;
+
+        // Check what the crosshair is pointing at
+        HitResult hitResult = mc.hitResult;
+        if (!(hitResult instanceof EntityHitResult entityHit)) return;
+
+        Entity target = entityHit.getEntity();
+
+        // Only attack players
+        if (!(target instanceof Player)) return;
+
+        // Safety checks
+        if (!target.isAlive()) return;
+        if (target == mc.player) return;
+
+        // Optional reach limit (vanilla-like)
+        if (mc.player.distanceTo(target) > 3.0F) return;
+
+        // Perform ONE normal vanilla attack
+        mc.gameMode.attack(mc.player, target);
+        mc.player.swing(InteractionHand.MAIN_HAND);
     }
 
     @Override
     public String getDisplayInfo() {
-        return "Packet";
+        return "Look";
     }
 }
